@@ -20,30 +20,22 @@ env:
   RUSTDOCFLAGS: "-D warnings -D rustdoc::broken_intra_doc_links"
 
 jobs:
+  # Tier 0 — cheap source checks, no compile required. Gate the rest of CI.
   fmt:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     permissions:
       contents: read
     steps:
+      - name: Checkout sources
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/setup-rust
         with:
           components: rustfmt
       - name: Check formatting
         run: cargo fmt --all --check
-
-  clippy:
-    runs-on: ubuntu-latest
-    timeout-minutes: 3
-    permissions:
-      contents: read
-    steps:
-      - uses: ./.github/actions/setup-rust
-        with:
-          components: clippy
-          cache-key: lint
-      - name: Run clippy on all targets and features
-        run: cargo clippy --all-targets --all-features -- -D warnings
 
   typos:
     runs-on: ubuntu-latest
@@ -58,36 +50,72 @@ jobs:
       - name: Run typos
         uses: crate-ci/typos@5374cbf686e897b15713110e233094e2874de7ef # v1.46.1
 
-  docs:
-    runs-on: ubuntu-latest
-    timeout-minutes: 3
-    permissions:
-      contents: read
-    steps:
-      - uses: ./.github/actions/setup-rust
-        with:
-          cache-key: lint
-      - name: Build docs (no deps, all features)
-        run: cargo doc --no-deps --all-features
-
   rdme:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     permissions:
       contents: read
     steps:
+      - name: Checkout sources
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/setup-rust
         with:
           tools: cargo-rdme
       - name: Check README is in sync
         run: cargo rdme --check
 
-  msrv:
+  # Tier 1 — first real compilation. Gates the heavy tier below so we don't
+  # repeat the same compile error 4× across docs/msrv/hack/test.
+  clippy:
+    needs: [fmt, typos, rdme]
     runs-on: ubuntu-latest
     timeout-minutes: 3
     permissions:
       contents: read
     steps:
+      - name: Checkout sources
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-rust
+        with:
+          components: clippy
+          cache-key: lint
+      - name: Run clippy on all targets and features
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+  # Tier 2 — compile-heavy jobs. Run in parallel once clippy proves the
+  # crate at least compiles cleanly.
+  docs:
+    needs: clippy
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-rust
+        with:
+          cache-key: lint
+      - name: Build docs (no deps, all features)
+        run: cargo doc --no-deps --all-features
+
+  msrv:
+    needs: clippy
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/setup-rust
         with:
           tools: cargo-msrv,cargo-hack
@@ -96,11 +124,16 @@ jobs:
         run: cargo msrv verify -- cargo check --all-features
 
   hack:
+    needs: clippy
     runs-on: ubuntu-latest
     timeout-minutes: 3
     permissions:
       contents: read
     steps:
+      - name: Checkout sources
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/setup-rust
         with:
           tools: cargo-hack
@@ -109,11 +142,16 @@ jobs:
         run: cargo hack check --feature-powerset --depth 2 --no-dev-deps
 
   test:
+    needs: clippy
     runs-on: ubuntu-latest
     timeout-minutes: 3
     permissions:
       contents: read
     steps:
+      - name: Checkout sources
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/setup-rust
         with:
           tools: cargo-nextest
@@ -123,7 +161,9 @@ jobs:
       - name: Run doctests
         run: cargo test --doc --all-features
 
+  # Tier 3 — coverage scan. Only meaningful if tests pass.
   sonarqube:
+    needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 3
     permissions:
@@ -161,13 +201,16 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
+  # Aggregator — required by branch protection. Every upstream must report
+  # success; with the tiered `needs:` above, a `skipped` result now means an
+  # upstream cascade failure, so we no longer accept `skipped` as OK.
   conclusion:
-    needs: [fmt, clippy, typos, docs, rdme, msrv, hack, test, sonarqube]
+    needs: [fmt, typos, rdme, clippy, docs, msrv, hack, test, sonarqube]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
       - name: Verify all required checks succeeded
         run: |
-          jq -e 'all(.[]; .result == "success" or .result == "skipped")' \
+          jq -e 'all(.[]; .result == "success")' \
             <<< '${{ toJSON(needs) }}'
