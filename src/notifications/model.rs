@@ -84,9 +84,34 @@ pub struct Notification {
     pub sent_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
+impl Notification {
+    /// Creates a new pending notification.
+    #[must_use]
+    pub fn new(
+        tenant_id: TenantId,
+        recipient_id: RecipientId,
+        channel: ChannelKind,
+        content: Content,
+    ) -> Self {
+        Self {
+            id: NotificationId::generate(),
+            tenant_id,
+            recipient_id,
+            channel,
+            content,
+            status: NotificationStatus::Pending,
+            created_at: chrono::Utc::now(),
+            sent_at: None,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::channels::ChannelKind;
+    use crate::recipients::RecipientId;
+    use crate::tenants::TenantId;
 
     #[test]
     fn generate_produces_distinct_ids() {
@@ -97,5 +122,28 @@ mod tests {
     fn content_new_stores_body() {
         let c = Content::new("hello");
         assert_eq!(c.body, "hello");
+    }
+
+    #[test]
+    fn new_starts_pending_without_sent_at() {
+        let tenant = TenantId::generate();
+        let recipient = RecipientId::generate();
+        let before = chrono::Utc::now();
+
+        let n = Notification::new(
+            tenant,
+            recipient,
+            ChannelKind::Webhook,
+            Content::new("hello"),
+        );
+
+        let after = chrono::Utc::now();
+        assert_eq!(n.tenant_id, tenant);
+        assert_eq!(n.recipient_id, recipient);
+        assert_eq!(n.channel, ChannelKind::Webhook);
+        assert_eq!(n.content, Content::new("hello"));
+        assert_eq!(n.status, NotificationStatus::Pending);
+        assert!(n.sent_at.is_none());
+        assert!(n.created_at >= before && n.created_at <= after);
     }
 }
