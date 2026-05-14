@@ -3,6 +3,7 @@
 use std::fmt;
 
 use crate::channels::ContactPoint;
+use crate::recipients::RecipientError;
 use crate::tenants::TenantId;
 
 /// Identifier of a recipient within a tenant.
@@ -31,15 +32,13 @@ impl fmt::Display for RecipientId {
 
 /// A recipient: a tenant-scoped identity with at least one contact point.
 ///
-/// Constructor and mutators are added in subsequent tasks.
+/// Immutable: every transition (e.g. [`Recipient::with_contact_point`]) consumes
+/// the value and returns a new one.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Recipient {
-    /// Stable identifier.
-    pub id: RecipientId,
-    /// Owning tenant.
-    pub tenant_id: TenantId,
-    /// At least one addressable destination.
-    pub contact_points: Vec<ContactPoint>,
+    id: RecipientId,
+    tenant_id: TenantId,
+    contact_points: Vec<ContactPoint>,
 }
 
 impl Recipient {
@@ -50,9 +49,9 @@ impl Recipient {
     pub fn new(
         tenant_id: TenantId,
         contact_points: Vec<ContactPoint>,
-    ) -> Result<Self, crate::recipients::RecipientError> {
+    ) -> Result<Self, RecipientError> {
         if contact_points.is_empty() {
-            return Err(crate::recipients::RecipientError::NoContactPoints);
+            return Err(RecipientError::NoContactPoints);
         }
         Ok(Self {
             id: RecipientId::generate(),
@@ -61,12 +60,36 @@ impl Recipient {
         })
     }
 
-    /// Adds a contact point to this recipient.
+    /// Stable identifier.
+    #[must_use]
+    pub fn id(&self) -> RecipientId {
+        self.id
+    }
+
+    /// Owning tenant.
+    #[must_use]
+    pub fn tenant_id(&self) -> TenantId {
+        self.tenant_id
+    }
+
+    /// At least one addressable destination.
+    #[must_use]
+    pub fn contact_points(&self) -> &[ContactPoint] {
+        &self.contact_points
+    }
+
+    /// Returns a new recipient with `cp` appended to its contact points.
     ///
     /// The invariant "at least one contact point" is monotonic: this
     /// operation can only grow the list.
-    pub fn add_contact_point(&mut self, cp: ContactPoint) {
-        self.contact_points.push(cp);
+    #[must_use]
+    pub fn with_contact_point(self, cp: ContactPoint) -> Self {
+        let mut contact_points = self.contact_points;
+        contact_points.push(cp);
+        Self {
+            contact_points,
+            ..self
+        }
     }
 }
 
@@ -76,7 +99,6 @@ mod tests {
 
     use super::*;
     use crate::channels::{ChannelKind, ContactPoint};
-    use crate::recipients::RecipientError;
     use crate::tenants::TenantId;
 
     #[test]
@@ -85,10 +107,7 @@ mod tests {
     }
 
     fn webhook_cp() -> ContactPoint {
-        ContactPoint {
-            kind: ChannelKind::Webhook,
-            address: "https://example.com/h".into(),
-        }
+        ContactPoint::new(ChannelKind::Webhook, "https://example.com/h")
     }
 
     #[test]
@@ -96,8 +115,8 @@ mod tests {
         let tenant = TenantId::generate();
         let cp = webhook_cp();
         let r = Recipient::new(tenant, vec![cp.clone()]).unwrap();
-        assert_eq!(r.tenant_id, tenant);
-        assert_eq!(r.contact_points, vec![cp]);
+        assert_eq!(r.tenant_id(), tenant);
+        assert_eq!(r.contact_points(), &[cp][..]);
     }
 
     #[test]
@@ -110,17 +129,30 @@ mod tests {
     }
 
     #[test]
-    fn add_contact_point_appends() {
+    fn with_contact_point_returns_new_recipient_with_appended_point() {
         let tenant = TenantId::generate();
         let cp1 = webhook_cp();
-        let mut r = Recipient::new(tenant, vec![cp1.clone()]).unwrap();
+        let original = Recipient::new(tenant, vec![cp1.clone()]).unwrap();
+        let original_id = original.id();
 
-        let cp2 = ContactPoint {
-            kind: ChannelKind::Webhook,
-            address: "https://other.example/h".into(),
-        };
-        r.add_contact_point(cp2.clone());
+        let cp2 = ContactPoint::new(ChannelKind::Webhook, "https://other.example/h");
+        let updated = original.with_contact_point(cp2.clone());
 
-        assert_eq!(r.contact_points, vec![cp1, cp2]);
+        assert_eq!(updated.id(), original_id);
+        assert_eq!(updated.tenant_id(), tenant);
+        assert_eq!(updated.contact_points(), &[cp1, cp2][..]);
+    }
+
+    #[test]
+    fn with_contact_point_does_not_affect_prior_snapshot() {
+        let tenant = TenantId::generate();
+        let cp1 = webhook_cp();
+        let snapshot = Recipient::new(tenant, vec![cp1.clone()]).unwrap();
+        let before = snapshot.clone();
+
+        let cp2 = ContactPoint::new(ChannelKind::Webhook, "https://other.example/h");
+        let _updated = snapshot.with_contact_point(cp2);
+
+        assert_eq!(before.contact_points(), &[cp1][..]);
     }
 }

@@ -6,6 +6,7 @@ use std::time::Duration;
 use crate::channels::ChannelKind;
 use crate::notifications::Content;
 use crate::recipients::RecipientId;
+use crate::sequences::SequenceError;
 use crate::tenants::TenantId;
 
 /// Identifier of a sequence definition within a tenant.
@@ -57,29 +58,55 @@ impl fmt::Display for EnrollmentId {
 }
 
 /// One step in a sequence.
+///
+/// Immutable: construct via [`SequenceStep::new`], read via accessors.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SequenceStep {
+    delay: Duration,
+    channel: ChannelKind,
+    content: Content,
+}
+
+impl SequenceStep {
+    /// Creates a step with the given delay, channel, and content.
+    #[must_use]
+    pub fn new(delay: Duration, channel: ChannelKind, content: Content) -> Self {
+        Self {
+            delay,
+            channel,
+            content,
+        }
+    }
+
     /// Wait time after the previous step (or after enrollment for the first step).
-    pub delay: Duration,
+    #[must_use]
+    pub fn delay(&self) -> Duration {
+        self.delay
+    }
+
     /// Channel to use for this step.
-    pub channel: ChannelKind,
+    #[must_use]
+    pub fn channel(&self) -> ChannelKind {
+        self.channel
+    }
+
     /// Payload for this step.
-    pub content: Content,
+    #[must_use]
+    pub fn content(&self) -> &Content {
+        &self.content
+    }
 }
 
 /// A multi-step sequence definition, scoped to a tenant.
 ///
-/// Construct via [`Sequence::builder`].
+/// Immutable. Construct via [`Sequence::builder`]; once built, the value
+/// can only be read.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Sequence {
-    /// Stable identifier.
-    pub id: SequenceId,
-    /// Owning tenant.
-    pub tenant_id: TenantId,
-    /// Human-readable name.
-    pub name: String,
-    /// Ordered steps; non-empty by construction.
-    pub steps: Vec<SequenceStep>,
+    id: SequenceId,
+    tenant_id: TenantId,
+    name: String,
+    steps: Vec<SequenceStep>,
 }
 
 impl Sequence {
@@ -92,6 +119,30 @@ impl Sequence {
             steps: Vec::new(),
         }
     }
+
+    /// Stable identifier.
+    #[must_use]
+    pub fn id(&self) -> SequenceId {
+        self.id
+    }
+
+    /// Owning tenant.
+    #[must_use]
+    pub fn tenant_id(&self) -> TenantId {
+        self.tenant_id
+    }
+
+    /// Human-readable name.
+    #[must_use]
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Ordered steps; non-empty by construction.
+    #[must_use]
+    pub fn steps(&self) -> &[SequenceStep] {
+        &self.steps
+    }
 }
 
 /// Fluent builder for [`Sequence`].
@@ -103,20 +154,21 @@ pub struct SequenceBuilder {
 }
 
 impl SequenceBuilder {
-    /// Appends `step` to the sequence under construction.
+    /// Returns a new builder with `step` appended.
     #[must_use]
-    pub fn add_step(mut self, step: SequenceStep) -> Self {
-        self.steps.push(step);
-        self
+    pub fn add_step(self, step: SequenceStep) -> Self {
+        let mut steps = self.steps;
+        steps.push(step);
+        Self { steps, ..self }
     }
 
     /// Finalizes the sequence.
     ///
     /// # Errors
-    /// Returns [`crate::sequences::SequenceError::EmptySteps`] if no steps were added.
-    pub fn build(self) -> Result<Sequence, crate::sequences::SequenceError> {
+    /// Returns [`SequenceError::EmptySteps`] if no steps were added.
+    pub fn build(self) -> Result<Sequence, SequenceError> {
         if self.steps.is_empty() {
-            return Err(crate::sequences::SequenceError::EmptySteps);
+            return Err(SequenceError::EmptySteps);
         }
         Ok(Sequence {
             id: SequenceId::generate(),
@@ -144,21 +196,17 @@ pub enum EnrollmentStatus {
 
 /// A recipient's progress through a sequence.
 ///
-/// Construct via [`Enrollment::new`].
+/// Immutable. Construct via [`Enrollment::new`]; transitions
+/// ([`Enrollment::advance`], [`Enrollment::cancel`]) consume the value and
+/// return a new one with the same identity.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Enrollment {
-    /// Stable identifier.
-    pub id: EnrollmentId,
-    /// Owning tenant.
-    pub tenant_id: TenantId,
-    /// The sequence being walked.
-    pub sequence_id: SequenceId,
-    /// The recipient walking it.
-    pub recipient_id: RecipientId,
-    /// Current status.
-    pub status: EnrollmentStatus,
-    /// When enrollment was created.
-    pub enrolled_at: chrono::DateTime<chrono::Utc>,
+    id: EnrollmentId,
+    tenant_id: TenantId,
+    sequence_id: SequenceId,
+    recipient_id: RecipientId,
+    status: EnrollmentStatus,
+    enrolled_at: chrono::DateTime<chrono::Utc>,
 }
 
 impl Enrollment {
@@ -175,27 +223,75 @@ impl Enrollment {
         }
     }
 
-    /// Advances the enrollment by one step.
+    /// Stable identifier.
+    #[must_use]
+    pub fn id(&self) -> EnrollmentId {
+        self.id
+    }
+
+    /// Owning tenant.
+    #[must_use]
+    pub fn tenant_id(&self) -> TenantId {
+        self.tenant_id
+    }
+
+    /// The sequence being walked.
+    #[must_use]
+    pub fn sequence_id(&self) -> SequenceId {
+        self.sequence_id
+    }
+
+    /// The recipient walking it.
+    #[must_use]
+    pub fn recipient_id(&self) -> RecipientId {
+        self.recipient_id
+    }
+
+    /// Current status.
+    #[must_use]
+    pub fn status(&self) -> &EnrollmentStatus {
+        &self.status
+    }
+
+    /// When enrollment was created.
+    #[must_use]
+    pub fn enrolled_at(&self) -> chrono::DateTime<chrono::Utc> {
+        self.enrolled_at
+    }
+
+    /// Returns a new enrollment advanced by one step.
     ///
     /// - `Active { i }` becomes `Active { i + 1 }` when `i + 1 < total_steps`.
     /// - `Active { i }` becomes `Completed` when `i + 1 >= total_steps`.
-    /// - `Completed` and `Cancelled` are terminal — this is a no-op.
-    pub fn advance(&mut self, total_steps: usize) {
-        if let EnrollmentStatus::Active { next_step_index } = self.status {
-            let next = next_step_index + 1;
-            self.status = if next >= total_steps {
-                EnrollmentStatus::Completed
-            } else {
-                EnrollmentStatus::Active {
-                    next_step_index: next,
+    /// - `Completed` and `Cancelled` are terminal — returns the same status unchanged.
+    #[must_use]
+    pub fn advance(self, total_steps: usize) -> Self {
+        let next_status = match self.status {
+            EnrollmentStatus::Active { next_step_index } => {
+                let next = next_step_index + 1;
+                if next >= total_steps {
+                    EnrollmentStatus::Completed
+                } else {
+                    EnrollmentStatus::Active {
+                        next_step_index: next,
+                    }
                 }
-            };
+            }
+            terminal => terminal,
+        };
+        Self {
+            status: next_status,
+            ..self
         }
     }
 
-    /// Cancels the enrollment regardless of its prior state.
-    pub fn cancel(&mut self) {
-        self.status = EnrollmentStatus::Cancelled;
+    /// Returns a cancelled copy of this enrollment regardless of its prior state.
+    #[must_use]
+    pub fn cancel(self) -> Self {
+        Self {
+            status: EnrollmentStatus::Cancelled,
+            ..self
+        }
     }
 }
 
@@ -216,21 +312,26 @@ mod tests {
     }
 
     fn sample_step() -> SequenceStep {
-        SequenceStep {
-            delay: Duration::from_secs(60),
-            channel: ChannelKind::Webhook,
-            content: Content::new("hi"),
-        }
+        SequenceStep::new(
+            Duration::from_secs(60),
+            ChannelKind::Webhook,
+            Content::new("hi"),
+        )
+    }
+
+    #[test]
+    fn sequence_step_exposes_fields() {
+        let s = sample_step();
+        assert_eq!(s.delay(), Duration::from_secs(60));
+        assert_eq!(s.channel(), ChannelKind::Webhook);
+        assert_eq!(s.content(), &Content::new("hi"));
     }
 
     #[test]
     fn builder_rejects_empty_steps() {
         let tenant = TenantId::generate();
         let result = Sequence::builder(tenant, "welcome").build();
-        assert!(matches!(
-            result,
-            Err(crate::sequences::SequenceError::EmptySteps)
-        ));
+        assert!(matches!(result, Err(SequenceError::EmptySteps)));
     }
 
     #[test]
@@ -242,10 +343,10 @@ mod tests {
             .add_step(s.clone())
             .build()
             .unwrap();
-        assert_eq!(seq.tenant_id, tenant);
-        assert_eq!(seq.name, "welcome");
-        assert_eq!(seq.steps.len(), 2);
-        assert_eq!(seq.steps[0], s);
+        assert_eq!(seq.tenant_id(), tenant);
+        assert_eq!(seq.name(), "welcome");
+        assert_eq!(seq.steps().len(), 2);
+        assert_eq!(&seq.steps()[0], &s);
     }
 
     #[test]
@@ -258,69 +359,111 @@ mod tests {
         let e = Enrollment::new(tenant, seq, rec);
 
         let after = chrono::Utc::now();
-        assert_eq!(e.tenant_id, tenant);
-        assert_eq!(e.sequence_id, seq);
-        assert_eq!(e.recipient_id, rec);
-        assert_eq!(e.status, EnrollmentStatus::Active { next_step_index: 0 });
-        assert!(e.enrolled_at >= before && e.enrolled_at <= after);
+        assert_eq!(e.tenant_id(), tenant);
+        assert_eq!(e.sequence_id(), seq);
+        assert_eq!(e.recipient_id(), rec);
+        assert_eq!(e.status(), &EnrollmentStatus::Active { next_step_index: 0 });
+        assert!(e.enrolled_at() >= before && e.enrolled_at() <= after);
     }
 
     #[test]
-    fn advance_moves_to_next_step() {
-        let mut e = Enrollment::new(
+    fn advance_returns_new_enrollment_at_next_step() {
+        let e = Enrollment::new(
             TenantId::generate(),
             SequenceId::generate(),
             RecipientId::generate(),
         );
-        e.advance(3);
-        assert_eq!(e.status, EnrollmentStatus::Active { next_step_index: 1 });
+        let original_id = e.id();
+
+        let advanced = e.advance(3);
+
+        assert_eq!(advanced.id(), original_id);
+        assert_eq!(
+            advanced.status(),
+            &EnrollmentStatus::Active { next_step_index: 1 }
+        );
     }
 
     #[test]
-    fn advance_to_last_completes() {
-        let mut e = Enrollment::new(
+    fn advance_to_last_step_completes() {
+        let e = Enrollment::new(
             TenantId::generate(),
             SequenceId::generate(),
             RecipientId::generate(),
-        );
-        e.advance(2); // Active{0} -> Active{1}
-        e.advance(2); // Active{1} -> Completed (next would be 2, >= total 2)
-        assert_eq!(e.status, EnrollmentStatus::Completed);
+        )
+        .advance(2) // Active{0} -> Active{1}
+        .advance(2); // Active{1} -> Completed
+        assert_eq!(e.status(), &EnrollmentStatus::Completed);
     }
 
     #[test]
     fn advance_is_noop_when_completed() {
-        let mut e = Enrollment::new(
+        let completed = Enrollment::new(
             TenantId::generate(),
             SequenceId::generate(),
             RecipientId::generate(),
-        );
-        e.advance(1); // Active{0} -> Completed
-        assert_eq!(e.status, EnrollmentStatus::Completed);
-        e.advance(1); // no-op
-        assert_eq!(e.status, EnrollmentStatus::Completed);
+        )
+        .advance(1); // Active{0} -> Completed
+        assert_eq!(completed.status(), &EnrollmentStatus::Completed);
+
+        let still_completed = completed.advance(1);
+        assert_eq!(still_completed.status(), &EnrollmentStatus::Completed);
     }
 
     #[test]
-    fn cancel_sets_status_to_cancelled() {
-        let mut e = Enrollment::new(
+    fn cancel_returns_cancelled_enrollment() {
+        let cancelled = Enrollment::new(
             TenantId::generate(),
             SequenceId::generate(),
             RecipientId::generate(),
-        );
-        e.cancel();
-        assert_eq!(e.status, EnrollmentStatus::Cancelled);
+        )
+        .cancel();
+        assert_eq!(cancelled.status(), &EnrollmentStatus::Cancelled);
     }
 
     #[test]
     fn cancel_overrides_completed() {
-        let mut e = Enrollment::new(
+        let cancelled = Enrollment::new(
+            TenantId::generate(),
+            SequenceId::generate(),
+            RecipientId::generate(),
+        )
+        .advance(1) // -> Completed
+        .cancel();
+        assert_eq!(cancelled.status(), &EnrollmentStatus::Cancelled);
+    }
+
+    #[test]
+    fn advance_does_not_affect_prior_snapshot() {
+        let active = Enrollment::new(
             TenantId::generate(),
             SequenceId::generate(),
             RecipientId::generate(),
         );
-        e.advance(1); // -> Completed
-        e.cancel();
-        assert_eq!(e.status, EnrollmentStatus::Cancelled);
+        let snapshot = active.clone();
+
+        let _advanced = active.advance(3);
+
+        assert_eq!(
+            snapshot.status(),
+            &EnrollmentStatus::Active { next_step_index: 0 }
+        );
+    }
+
+    #[test]
+    fn cancel_does_not_affect_prior_snapshot() {
+        let active = Enrollment::new(
+            TenantId::generate(),
+            SequenceId::generate(),
+            RecipientId::generate(),
+        );
+        let snapshot = active.clone();
+
+        let _cancelled = active.cancel();
+
+        assert_eq!(
+            snapshot.status(),
+            &EnrollmentStatus::Active { next_step_index: 0 }
+        );
     }
 }

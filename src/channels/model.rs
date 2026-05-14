@@ -43,12 +43,35 @@ impl WebhookUrl {
 }
 
 /// A single addressable destination for a recipient.
+///
+/// Immutable: construct via [`ContactPoint::new`], read via accessors.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ContactPoint {
+    kind: ChannelKind,
+    address: String,
+}
+
+impl ContactPoint {
+    /// Creates a contact point pairing a channel with its address.
+    #[must_use]
+    pub fn new(kind: ChannelKind, address: impl Into<String>) -> Self {
+        Self {
+            kind,
+            address: address.into(),
+        }
+    }
+
     /// The channel kind to use for this destination.
-    pub kind: ChannelKind,
+    #[must_use]
+    pub fn kind(&self) -> ChannelKind {
+        self.kind
+    }
+
     /// The channel-specific address (for [`ChannelKind::Webhook`], a URL).
-    pub address: String,
+    #[must_use]
+    pub fn address(&self) -> &str {
+        &self.address
+    }
 }
 
 #[cfg(test)]
@@ -84,5 +107,12 @@ mod tests {
             WebhookUrl::parse("example.com/hook"),
             Err(ChannelError::InvalidWebhookUrl)
         ));
+    }
+
+    #[test]
+    fn contact_point_exposes_kind_and_address() {
+        let cp = ContactPoint::new(ChannelKind::Webhook, "https://example.com/h");
+        assert_eq!(cp.kind(), ChannelKind::Webhook);
+        assert_eq!(cp.address(), "https://example.com/h");
     }
 }
