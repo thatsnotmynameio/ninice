@@ -191,6 +191,13 @@ mod tests {
     }
 
     #[test]
+    fn from_uuid_round_trips_through_display() {
+        let raw = uuid::Uuid::new_v4();
+        let id = NotificationId::from_uuid(raw);
+        assert_eq!(id.to_string(), raw.to_string());
+    }
+
+    #[test]
     fn content_new_stores_body() {
         let c = Content::new("hello");
         assert_eq!(c.body(), "hello");

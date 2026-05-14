@@ -2,5 +2,5 @@
 //! (CLI/HTTP/worker) is decided in a later iteration.
 
 fn main() {
-    println!("ninice {}", env!("CARGO_PKG_VERSION"));
+    println!("{}", ninice::version_banner());
 }

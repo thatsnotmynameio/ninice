@@ -106,6 +106,13 @@ mod tests {
         assert_ne!(RecipientId::generate(), RecipientId::generate());
     }
 
+    #[test]
+    fn from_uuid_round_trips_through_display() {
+        let raw = uuid::Uuid::new_v4();
+        let id = RecipientId::from_uuid(raw);
+        assert_eq!(id.to_string(), raw.to_string());
+    }
+
     fn webhook_cp() -> ContactPoint {
         ContactPoint::new(ChannelKind::Webhook, "https://example.com/h")
     }

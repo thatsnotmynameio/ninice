@@ -307,8 +307,22 @@ mod tests {
     }
 
     #[test]
+    fn sequence_id_from_uuid_round_trips_through_display() {
+        let raw = uuid::Uuid::new_v4();
+        let id = SequenceId::from_uuid(raw);
+        assert_eq!(id.to_string(), raw.to_string());
+    }
+
+    #[test]
     fn enrollment_id_generate_produces_distinct() {
         assert_ne!(EnrollmentId::generate(), EnrollmentId::generate());
+    }
+
+    #[test]
+    fn enrollment_id_from_uuid_round_trips_through_display() {
+        let raw = uuid::Uuid::new_v4();
+        let id = EnrollmentId::from_uuid(raw);
+        assert_eq!(id.to_string(), raw.to_string());
     }
 
     fn sample_step() -> SequenceStep {
@@ -347,6 +361,20 @@ mod tests {
         assert_eq!(seq.name(), "welcome");
         assert_eq!(seq.steps().len(), 2);
         assert_eq!(&seq.steps()[0], &s);
+    }
+
+    #[test]
+    fn each_built_sequence_has_a_distinct_id() {
+        let tenant = TenantId::generate();
+        let a = Sequence::builder(tenant, "x")
+            .add_step(sample_step())
+            .build()
+            .unwrap();
+        let b = Sequence::builder(tenant, "x")
+            .add_step(sample_step())
+            .build()
+            .unwrap();
+        assert_ne!(a.id(), b.id());
     }
 
     #[test]
