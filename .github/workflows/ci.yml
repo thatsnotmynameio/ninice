@@ -196,12 +196,16 @@ jobs:
 
   # ─── Tier 3 ─── coverage scan. Only meaningful if tests pass.
 
+  # Static analysis + security hotspots + duplication + complexity +
+  # maintainability scoring. Coverage (LCOV generated below) is one
+  # input among many, not the whole purpose.
+  #
   # Sonar runs cargo clippy internally to collect findings; with the
   # workflow-level `RUSTFLAGS: -D warnings` every warning aborts the
   # scan instead of being reported. Reset it here so clippy completes
   # and the report reaches Sonar.
   sonarqube:
-    name: Coverage (Sonar)
+    name: Code quality (Sonar)
     needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 3
