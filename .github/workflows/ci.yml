@@ -111,11 +111,14 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/audit
 
-  # ─── Tier 2 ─── compile-heavy jobs. Parallel once clippy proves compile.
+  # ─── Tier 2 ─── compile-heavy jobs. Parallel once clippy proves compile
+  # and deny clears advisories. Both Tier 1 jobs must succeed before any
+  # Tier 2 job starts, so a single advisory or compile error short-circuits
+  # ~3-4 minutes of redundant builds.
 
   docs:
     name: Docs build
-    needs: clippy
+    needs: [clippy, deny]
     runs-on: ubuntu-latest
     timeout-minutes: 3
     permissions:
@@ -135,7 +138,7 @@ jobs:
   # the `rust-version` field in Cargo.toml).
   msrv:
     name: MSRV verification
-    needs: clippy
+    needs: [clippy, deny]
     runs-on: ubuntu-latest
     timeout-minutes: 3
     permissions:
@@ -156,7 +159,7 @@ jobs:
   # feature-gate breakage that single-feature builds miss.
   hack:
     name: Feature powerset
-    needs: clippy
+    needs: [clippy, deny]
     runs-on: ubuntu-latest
     timeout-minutes: 3
     permissions:
@@ -175,7 +178,7 @@ jobs:
 
   test:
     name: Test suite
-    needs: clippy
+    needs: [clippy, deny]
     runs-on: ubuntu-latest
     timeout-minutes: 3
     permissions:
