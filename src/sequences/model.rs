@@ -195,6 +195,11 @@ impl Enrollment {
             };
         }
     }
+
+    /// Cancels the enrollment regardless of its prior state.
+    pub fn cancel(&mut self) {
+        self.status = EnrollmentStatus::Cancelled;
+    }
 }
 
 #[cfg(test)]
@@ -292,5 +297,28 @@ mod tests {
         assert_eq!(e.status, EnrollmentStatus::Completed);
         e.advance(1); // no-op
         assert_eq!(e.status, EnrollmentStatus::Completed);
+    }
+
+    #[test]
+    fn cancel_sets_status_to_cancelled() {
+        let mut e = Enrollment::new(
+            TenantId::generate(),
+            SequenceId::generate(),
+            RecipientId::generate(),
+        );
+        e.cancel();
+        assert_eq!(e.status, EnrollmentStatus::Cancelled);
+    }
+
+    #[test]
+    fn cancel_overrides_completed() {
+        let mut e = Enrollment::new(
+            TenantId::generate(),
+            SequenceId::generate(),
+            RecipientId::generate(),
+        );
+        e.advance(1); // -> Completed
+        e.cancel();
+        assert_eq!(e.status, EnrollmentStatus::Cancelled);
     }
 }
