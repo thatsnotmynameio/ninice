@@ -7,3 +7,4 @@ pub mod sequences;
 pub mod tenants;
 
 pub use channels::{Channel, ChannelError, ChannelKind, ContactPoint, WebhookUrl};
+pub use tenants::TenantId;
