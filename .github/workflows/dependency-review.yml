@@ -1,0 +1,43 @@
+name: Dependency review
+
+# Runs on every PR and inspects the dep diff (base..head). For every
+# new dep (direct or transitive), checks the GitHub Advisory Database
+# and fails the run if any introduces a vulnerability at or above the
+# configured severity. Posts an inline summary on the PR so reviewers
+# see what's being added before approving.
+#
+# Complements cargo-deny (which lives in ci.yml as the `deny` job and
+# in audit.yml on a daily cron): cargo-deny audits the *current* lock
+# against the RustSec DB; this action audits the *delta* against the
+# GitHub Advisory DB. Different databases, different vantage points —
+# both useful.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  merge_group:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  review:
+    name: Dependency review
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+      pull-requests: write  # required to post the inline PR summary comment
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Run dependency review
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: always
