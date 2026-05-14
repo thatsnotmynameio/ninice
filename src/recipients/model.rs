@@ -43,12 +43,60 @@ pub struct Recipient {
     pub contact_points: Vec<ContactPoint>,
 }
 
+impl Recipient {
+    /// Creates a new recipient under `tenant_id`.
+    ///
+    /// # Errors
+    /// Returns [`RecipientError::NoContactPoints`] if `contact_points` is empty.
+    pub fn new(
+        tenant_id: TenantId,
+        contact_points: Vec<ContactPoint>,
+    ) -> Result<Self, crate::recipients::RecipientError> {
+        if contact_points.is_empty() {
+            return Err(crate::recipients::RecipientError::NoContactPoints);
+        }
+        Ok(Self {
+            id: RecipientId::generate(),
+            tenant_id,
+            contact_points,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::channels::{ChannelKind, ContactPoint};
+    use crate::recipients::RecipientError;
+    use crate::tenants::TenantId;
 
     #[test]
     fn generate_produces_distinct_ids() {
         assert_ne!(RecipientId::generate(), RecipientId::generate());
+    }
+
+    fn webhook_cp() -> ContactPoint {
+        ContactPoint {
+            kind: ChannelKind::Webhook,
+            address: "https://example.com/h".into(),
+        }
+    }
+
+    #[test]
+    fn new_assigns_tenant_and_contact_points() {
+        let tenant = TenantId::generate();
+        let cp = webhook_cp();
+        let r = Recipient::new(tenant, vec![cp.clone()]).unwrap();
+        assert_eq!(r.tenant_id, tenant);
+        assert_eq!(r.contact_points, vec![cp]);
+    }
+
+    #[test]
+    fn new_rejects_empty_contact_points() {
+        let tenant = TenantId::generate();
+        assert!(matches!(
+            Recipient::new(tenant, vec![]),
+            Err(RecipientError::NoContactPoints)
+        ));
     }
 }
