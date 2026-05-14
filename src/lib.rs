@@ -14,4 +14,8 @@ pub use notifications::{
 pub use recipients::{
     Recipient, RecipientError, RecipientId, RecipientRepository, RecipientService,
 };
+pub use sequences::{
+    Enrollment, EnrollmentId, EnrollmentRepository, EnrollmentStatus, Sequence, SequenceError,
+    SequenceId, SequenceRepository, SequenceService, SequenceStep,
+};
 pub use tenants::TenantId;
