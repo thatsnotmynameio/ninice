@@ -151,6 +151,13 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    # Sonar runs cargo clippy internally to collect findings; with the
+    # workflow-level `RUSTFLAGS: -D warnings` every warning aborts the
+    # scan instead of being reported. Reset it here so clippy completes
+    # and the report reaches Sonar.
+    env:
+      RUSTFLAGS: ""
+      RUSTDOCFLAGS: ""
     steps:
       - uses: actions/checkout@v6
         with:
