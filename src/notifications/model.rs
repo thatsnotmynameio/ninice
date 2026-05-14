@@ -104,6 +104,12 @@ impl Notification {
             sent_at: None,
         }
     }
+
+    /// Marks this notification as successfully sent and stamps `sent_at`.
+    pub fn mark_sent(&mut self) {
+        self.status = NotificationStatus::Sent;
+        self.sent_at = Some(chrono::Utc::now());
+    }
 }
 
 #[cfg(test)]
@@ -145,5 +151,24 @@ mod tests {
         assert_eq!(n.status, NotificationStatus::Pending);
         assert!(n.sent_at.is_none());
         assert!(n.created_at >= before && n.created_at <= after);
+    }
+
+    #[test]
+    fn mark_sent_transitions_status_and_sets_sent_at() {
+        let mut n = Notification::new(
+            TenantId::generate(),
+            RecipientId::generate(),
+            ChannelKind::Webhook,
+            Content::new("hi"),
+        );
+        assert!(n.sent_at.is_none());
+
+        let before = chrono::Utc::now();
+        n.mark_sent();
+        let after = chrono::Utc::now();
+
+        assert_eq!(n.status, NotificationStatus::Sent);
+        let sent_at = n.sent_at.expect("sent_at must be set after mark_sent");
+        assert!(sent_at >= before && sent_at <= after);
     }
 }
