@@ -43,6 +43,27 @@ This spec captures the design for closing those gaps. Implementation is a single
 - Changes to `sonar-project.properties`, `deny.toml`, `Cargo.toml`.
 - Tightening the `Protect main` ruleset further (e.g. requiring approving reviewers). The ruleset surgery in this spec is limited to wiring the new checks into branch protection.
 
+## Resolved action versions (as of 2026-05-14)
+
+All third-party actions in this spec are pinned to the commit SHAs below. The
+`# vX.Y.Z` comment after each `@<sha>` is what Dependabot reads to know which
+semver line to follow when bumping.
+
+| Action | Reference | Commit SHA |
+|---|---|---|
+| `actions/checkout` | v6.0.2 | `de0fac2e4500dabe0009e67214ff5f5447ce83dd` |
+| `dtolnay/rust-toolchain` | `stable` (branch — not a tag) | `29eef336d9b2848a0b548edc03f92a220660cdb8` |
+| `Swatinem/rust-cache` | v2.9.1 | `c19371144df3bb44fab255c43d04cbc2ab54d1c4` |
+| `taiki-e/install-action` | v2.78.0 | `e1c4cd42111751368541a7cb5db3522bd1f846a4` |
+| `crate-ci/typos` | v1.46.1 | `5374cbf686e897b15713110e233094e2874de7ef` |
+| `github/codeql-action/init` & `/analyze` | v4.35.4 | `68bde559dea0fdcac2102bfdf6230c5f70eb485e` |
+| `SonarSource/sonarqube-scan-action` | v8.0.0 (already pinned in current ci.yml) | `59db25f34e16620e48ab4bb9e4a5dce155cb5432` |
+
+Notes:
+
+- `dtolnay/rust-toolchain` doesn't follow semver — it has per-Rust-version branches (`1.85`, `1.85.1`, etc.) and a moving `stable` branch. The comment is the branch name, not a version. Dependabot still tracks it via that comment.
+- `github/codeql-action` has `v3` and `v4` lines maintained in parallel. v4 is GA (Node.js v24 runtime is the only v3→v4 breaking change, irrelevant to us). The floating `v4` tag and the specific `v4.35.4` tag point to the same commit today; we pin with the specific version comment so Dependabot bumps on the patch line.
+
 ## File layout
 
 ```
@@ -87,24 +108,24 @@ runs:
   using: composite
   steps:
     - name: Checkout sources
-      uses: actions/checkout@<sha> # v6.0.1
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
         persist-credentials: false
 
     - name: Install Rust toolchain
-      uses: dtolnay/rust-toolchain@<sha> # stable
+      uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
       with:
         components: ${{ inputs.components }}
 
     - name: Install cargo tools
       if: inputs.tools != ''
-      uses: taiki-e/install-action@<sha> # v2.x.y
+      uses: taiki-e/install-action@e1c4cd42111751368541a7cb5db3522bd1f846a4 # v2.78.0
       with:
         tool: ${{ inputs.tools }}
 
     - name: Restore cargo cache
       if: inputs.cache-key != ''
-      uses: Swatinem/rust-cache@<sha> # v2.x.y
+      uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
       with:
         shared-key: ${{ inputs.cache-key }}
         save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -115,7 +136,7 @@ runs:
 - `if: inputs.X != ''` guards each integration so jobs only pay for what they use. Avoids the "kitchen-sink composite" anti-pattern.
 - `save-if: github.ref == 'refs/heads/main'` lives inside the composite, preserving the current policy that PRs read from the cache but only `main` writes to it. Inherited automatically by every job.
 - `persist-credentials: false` on `actions/checkout` prevents the `GITHUB_TOKEN` from being written to `.git/config`, where later steps could read it. Cheap security hardening.
-- SHAs are placeholders (`<sha>`) in this spec; resolved to real 40-char SHAs at implementation time from the latest GA release of each action.
+- SHAs above were resolved on 2026-05-14 (see the *Resolved action versions* table). Dependabot will keep them current after the first scheduled run.
 
 ### `ci.yml` after refactor
 
@@ -177,11 +198,11 @@ jobs:
       contents: read
     steps:
       - name: Checkout sources
-        uses: actions/checkout@<sha> # v6.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
       - name: Install cargo-deny
-        uses: taiki-e/install-action@<sha> # v2.x.y
+        uses: taiki-e/install-action@e1c4cd42111751368541a7cb5db3522bd1f846a4 # v2.78.0
         with:
           tool: cargo-deny
       - name: Run cargo deny
@@ -226,15 +247,15 @@ jobs:
         language: [rust, actions]
     steps:
       - name: Checkout sources
-        uses: actions/checkout@<sha> # v6.0.1
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@<sha> # v3.x.y
+        uses: github/codeql-action/init@68bde559dea0fdcac2102bfdf6230c5f70eb485e # v4.35.4
         with:
           languages: ${{ matrix.language }}
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@<sha> # v3.x.y
+        uses: github/codeql-action/analyze@68bde559dea0fdcac2102bfdf6230c5f70eb485e # v4.35.4
         with:
           category: "/language:${{ matrix.language }}"
 ```
