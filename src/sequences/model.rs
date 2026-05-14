@@ -179,6 +179,22 @@ impl Enrollment {
             enrolled_at: chrono::Utc::now(),
         }
     }
+
+    /// Advances the enrollment by one step.
+    ///
+    /// - `Active { i }` becomes `Active { i + 1 }` when `i + 1 < total_steps`.
+    /// - `Active { i }` becomes `Completed` when `i + 1 >= total_steps`.
+    /// - `Completed` and `Cancelled` are terminal — this is a no-op.
+    pub fn advance(&mut self, total_steps: usize) {
+        if let EnrollmentStatus::Active { next_step_index } = self.status {
+            let next = next_step_index + 1;
+            self.status = if next >= total_steps {
+                EnrollmentStatus::Completed
+            } else {
+                EnrollmentStatus::Active { next_step_index: next }
+            };
+        }
+    }
 }
 
 #[cfg(test)]
@@ -240,5 +256,41 @@ mod tests {
         assert_eq!(e.recipient_id, rec);
         assert_eq!(e.status, EnrollmentStatus::Active { next_step_index: 0 });
         assert!(e.enrolled_at >= before && e.enrolled_at <= after);
+    }
+
+    #[test]
+    fn advance_moves_to_next_step() {
+        let mut e = Enrollment::new(
+            TenantId::generate(),
+            SequenceId::generate(),
+            RecipientId::generate(),
+        );
+        e.advance(3);
+        assert_eq!(e.status, EnrollmentStatus::Active { next_step_index: 1 });
+    }
+
+    #[test]
+    fn advance_to_last_completes() {
+        let mut e = Enrollment::new(
+            TenantId::generate(),
+            SequenceId::generate(),
+            RecipientId::generate(),
+        );
+        e.advance(2); // Active{0} -> Active{1}
+        e.advance(2); // Active{1} -> Completed (next would be 2, >= total 2)
+        assert_eq!(e.status, EnrollmentStatus::Completed);
+    }
+
+    #[test]
+    fn advance_is_noop_when_completed() {
+        let mut e = Enrollment::new(
+            TenantId::generate(),
+            SequenceId::generate(),
+            RecipientId::generate(),
+        );
+        e.advance(1); // Active{0} -> Completed
+        assert_eq!(e.status, EnrollmentStatus::Completed);
+        e.advance(1); // no-op
+        assert_eq!(e.status, EnrollmentStatus::Completed);
     }
 }
