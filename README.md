@@ -2,7 +2,7 @@
 
 <!-- cargo-rdme start -->
 
-`ninice` is a TODO command-line application.
+`ninice` is a multi-channel, multi-tenant notification management library.
 
 <!-- cargo-rdme end -->
 

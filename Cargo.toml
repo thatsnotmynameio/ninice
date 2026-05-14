@@ -8,8 +8,9 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/thatsnotmynameio/ninice"
 
 [dependencies]
-anyhow = "1"
 thiserror = "2"
+uuid = { version = "1", features = ["v4"] }
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
 
 [lints.rust]
 unsafe_code = "forbid"

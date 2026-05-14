@@ -1,5 +1,6 @@
-//! Thin binary wrapper that prints [`ninice::greeting`].
+//! Binary entry point. Currently a domain stub; real entry point
+//! (CLI/HTTP/worker) is decided in a later iteration.
 
 fn main() {
-    println!("{}", ninice::greeting());
+    println!("{}", ninice::version_banner());
 }
