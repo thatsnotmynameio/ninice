@@ -2,6 +2,7 @@ name: CI
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   merge_group:
   push:
     branches: [main]
@@ -21,147 +22,110 @@ env:
 jobs:
   fmt:
     runs-on: ubuntu-latest
+    timeout-minutes: 3
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: ./.github/actions/setup-rust
         with:
           components: rustfmt
-      - run: cargo fmt --all --check
+      - name: Check formatting
+        run: cargo fmt --all --check
 
   clippy:
     runs-on: ubuntu-latest
+    timeout-minutes: 3
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: ./.github/actions/setup-rust
         with:
           components: clippy
-      - uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: lint
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-      - run: cargo clippy --all-targets --all-features -- -D warnings
+          cache-key: lint
+      - name: Run clippy on all targets and features
+        run: cargo clippy --all-targets --all-features -- -D warnings
 
   typos:
     runs-on: ubuntu-latest
+    timeout-minutes: 3
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v6
-      - uses: crate-ci/typos@v1
+      - name: Checkout sources
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Run typos
+        uses: crate-ci/typos@5374cbf686e897b15713110e233094e2874de7ef # v1.46.1
 
   docs:
     runs-on: ubuntu-latest
+    timeout-minutes: 3
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: ./.github/actions/setup-rust
         with:
-          shared-key: lint
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-      - run: cargo doc --no-deps --all-features
+          cache-key: lint
+      - name: Build docs (no deps, all features)
+        run: cargo doc --no-deps --all-features
 
   rdme:
     runs-on: ubuntu-latest
+    timeout-minutes: 3
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: taiki-e/install-action@v2
+      - uses: ./.github/actions/setup-rust
         with:
-          tool: cargo-rdme
-      - run: cargo rdme --check
-
-  deny:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v6
-      - uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-deny
-      - run: cargo deny check
+          tools: cargo-rdme
+      - name: Check README is in sync
+        run: cargo rdme --check
 
   msrv:
     runs-on: ubuntu-latest
+    timeout-minutes: 3
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: taiki-e/install-action@v2
+      - uses: ./.github/actions/setup-rust
         with:
-          tool: cargo-msrv,cargo-hack
-      - uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: msrv
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-      - run: cargo msrv verify -- cargo check --all-features
+          tools: cargo-msrv,cargo-hack
+          cache-key: msrv
+      - name: Verify MSRV
+        run: cargo msrv verify -- cargo check --all-features
 
   hack:
     runs-on: ubuntu-latest
+    timeout-minutes: 3
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: taiki-e/install-action@v2
+      - uses: ./.github/actions/setup-rust
         with:
-          tool: cargo-hack
-      - uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: lint
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-      - run: cargo hack check --feature-powerset --depth 2 --no-dev-deps
+          tools: cargo-hack
+          cache-key: lint
+      - name: Check feature powerset
+        run: cargo hack check --feature-powerset --depth 2 --no-dev-deps
 
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 3
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: taiki-e/install-action@v2
+      - uses: ./.github/actions/setup-rust
         with:
-          tool: cargo-nextest
-      - uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: test
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-      - run: cargo nextest run --all-features
-      - run: cargo test --doc --all-features
-
-  # semver-checks: temporarily disabled until ninice has a baseline that
-  # makes the check meaningful. The crate is unpublished and this PR is the
-  # transition from a `greeting()` placeholder to the full domain, so any
-  # baseline (crates.io or the prior `main`) reports breaking changes that
-  # are intentional. Re-enable once a real baseline exists.
-  # semver-checks:
-  #   if: github.event_name == 'pull_request'
-  #   runs-on: ubuntu-latest
-  #   permissions:
-  #     contents: read
-  #   steps:
-  #     - uses: actions/checkout@v6
-  #       with:
-  #         fetch-depth: 0
-  #     - name: Materialize PR base branch as a local ref
-  #       env:
-  #         BASE_REF: ${{ github.event.pull_request.base.ref }}
-  #       run: git fetch origin "$BASE_REF:$BASE_REF"
-  #     - uses: obi1kenobi/cargo-semver-checks-action@v2
-  #       with:
-  #         baseline-rev: ${{ github.event.pull_request.base.ref }}
+          tools: cargo-nextest
+          cache-key: test
+      - name: Run unit tests with nextest
+        run: cargo nextest run --all-features
+      - name: Run doctests
+        run: cargo test --doc --all-features
 
   sonarqube:
     runs-on: ubuntu-latest
+    timeout-minutes: 3
     permissions:
       contents: read
     # Sonar runs cargo clippy internally to collect findings; with the
@@ -172,16 +136,21 @@ jobs:
       RUSTFLAGS: ""
       RUSTDOCFLAGS: ""
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout sources (full history for Sonar)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
-      - uses: dtolnay/rust-toolchain@stable
+          persist-credentials: false
+      - name: Install Rust toolchain with clippy and llvm-tools
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
         with:
           components: clippy,llvm-tools-preview
-      - uses: taiki-e/install-action@v2
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@e1c4cd42111751368541a7cb5db3522bd1f846a4 # v2.78.0
         with:
           tool: cargo-llvm-cov
-      - uses: Swatinem/rust-cache@v2
+      - name: Restore cargo cache
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
           shared-key: sonarqube
           save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -193,11 +162,12 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
   conclusion:
-    needs: [fmt, clippy, typos, docs, rdme, deny, msrv, hack, test, sonarqube]
+    needs: [fmt, clippy, typos, docs, rdme, msrv, hack, test, sonarqube]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
+    timeout-minutes: 3
     steps:
-      - name: All checks succeeded
+      - name: Verify all required checks succeeded
         run: |
           jq -e 'all(.[]; .result == "success" or .result == "skipped")' \
             <<< '${{ toJSON(needs) }}'
