@@ -165,11 +165,7 @@ pub struct Enrollment {
 impl Enrollment {
     /// Enrolls `recipient_id` into `sequence_id` under `tenant_id`.
     #[must_use]
-    pub fn new(
-        tenant_id: TenantId,
-        sequence_id: SequenceId,
-        recipient_id: RecipientId,
-    ) -> Self {
+    pub fn new(tenant_id: TenantId, sequence_id: SequenceId, recipient_id: RecipientId) -> Self {
         Self {
             id: EnrollmentId::generate(),
             tenant_id,
@@ -191,7 +187,9 @@ impl Enrollment {
             self.status = if next >= total_steps {
                 EnrollmentStatus::Completed
             } else {
-                EnrollmentStatus::Active { next_step_index: next }
+                EnrollmentStatus::Active {
+                    next_step_index: next,
+                }
             };
         }
     }
@@ -228,7 +226,10 @@ mod tests {
     fn builder_rejects_empty_steps() {
         let tenant = TenantId::generate();
         let result = Sequence::builder(tenant, "welcome").build();
-        assert!(matches!(result, Err(crate::sequences::SequenceError::EmptySteps)));
+        assert!(matches!(
+            result,
+            Err(crate::sequences::SequenceError::EmptySteps)
+        ));
     }
 
     #[test]

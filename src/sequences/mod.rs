@@ -5,8 +5,7 @@ pub mod repository;
 pub mod service;
 
 pub use model::{
-    Enrollment, EnrollmentId, EnrollmentStatus, Sequence, SequenceBuilder, SequenceId,
-    SequenceStep,
+    Enrollment, EnrollmentId, EnrollmentStatus, Sequence, SequenceBuilder, SequenceId, SequenceStep,
 };
 pub use repository::{EnrollmentRepository, SequenceRepository};
 pub use service::SequenceService;
