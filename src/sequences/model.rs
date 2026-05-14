@@ -162,6 +162,25 @@ pub struct Enrollment {
     pub enrolled_at: chrono::DateTime<chrono::Utc>,
 }
 
+impl Enrollment {
+    /// Enrolls `recipient_id` into `sequence_id` under `tenant_id`.
+    #[must_use]
+    pub fn new(
+        tenant_id: TenantId,
+        sequence_id: SequenceId,
+        recipient_id: RecipientId,
+    ) -> Self {
+        Self {
+            id: EnrollmentId::generate(),
+            tenant_id,
+            sequence_id,
+            recipient_id,
+            status: EnrollmentStatus::Active { next_step_index: 0 },
+            enrolled_at: chrono::Utc::now(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -204,5 +223,22 @@ mod tests {
         assert_eq!(seq.name, "welcome");
         assert_eq!(seq.steps.len(), 2);
         assert_eq!(seq.steps[0], s);
+    }
+
+    #[test]
+    fn enrollment_new_starts_active_at_index_zero() {
+        let tenant = TenantId::generate();
+        let seq = SequenceId::generate();
+        let rec = RecipientId::generate();
+        let before = chrono::Utc::now();
+
+        let e = Enrollment::new(tenant, seq, rec);
+
+        let after = chrono::Utc::now();
+        assert_eq!(e.tenant_id, tenant);
+        assert_eq!(e.sequence_id, seq);
+        assert_eq!(e.recipient_id, rec);
+        assert_eq!(e.status, EnrollmentStatus::Active { next_step_index: 0 });
+        assert!(e.enrolled_at >= before && e.enrolled_at <= after);
     }
 }
