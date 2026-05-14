@@ -1,4 +1,3 @@
-#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 //! Recipient aggregate and value objects.
 
 use std::fmt;
@@ -73,6 +72,8 @@ impl Recipient {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used)]
+
     use super::*;
     use crate::channels::{ChannelKind, ContactPoint};
     use crate::recipients::RecipientError;

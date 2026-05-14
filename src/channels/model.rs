@@ -1,4 +1,3 @@
-#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 //! Channel value objects.
 
 use crate::channels::ChannelError;
@@ -54,6 +53,8 @@ pub struct ContactPoint {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used)]
+
     use super::*;
     use crate::channels::ChannelError;
 

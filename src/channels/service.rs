@@ -1,4 +1,3 @@
-#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 //! `Channel` port.
 
 use crate::channels::ChannelKind;

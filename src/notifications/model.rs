@@ -1,4 +1,3 @@
-#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 //! Notification aggregate and value objects.
 
 use std::fmt;
@@ -122,6 +121,8 @@ impl Notification {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used)]
+
     use super::*;
     use crate::channels::ChannelKind;
     use crate::recipients::RecipientId;
