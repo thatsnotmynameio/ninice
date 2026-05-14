@@ -145,7 +145,18 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v6
+        # cargo-semver-checks needs the base branch reachable to use it as
+        # the baseline; the default shallow clone (fetch-depth: 1) doesn't
+        # include it. Pull the full history.
+        with:
+          fetch-depth: 0
       - uses: obi1kenobi/cargo-semver-checks-action@v2
+        with:
+          # Compare against the PR's base branch instead of crates.io — the
+          # crate is not yet published. Once published, this still works
+          # (and is generally preferred over the registry baseline so the
+          # PR is judged against what's actually about to merge).
+          baseline-rev: ${{ github.event.pull_request.base.ref }}
 
   sonarqube:
     runs-on: ubuntu-latest
