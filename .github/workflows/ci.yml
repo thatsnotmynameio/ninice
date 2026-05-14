@@ -150,6 +150,14 @@ jobs:
         # include it. Pull the full history.
         with:
           fetch-depth: 0
+      # `actions/checkout` on a PR leaves only the PR head as a named ref —
+      # neither `main` nor `origin/main` exist locally even with fetch-depth 0.
+      # Materialize the base branch so cargo-semver-checks can resolve
+      # `<ref>^{tree}` when computing the baseline.
+      - name: Materialize PR base branch as a local ref
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: git fetch origin "$BASE_REF:$BASE_REF"
       - uses: obi1kenobi/cargo-semver-checks-action@v2
         with:
           # Compare against the PR's base branch instead of crates.io — the
