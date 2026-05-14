@@ -165,6 +165,10 @@ jobs:
           # (and is generally preferred over the registry baseline so the
           # PR is judged against what's actually about to merge).
           baseline-rev: ${{ github.event.pull_request.base.ref }}
+          # Test empirically whether `minor` is enough to allow this PR's
+          # API removal (it might not be — `function_missing` is classified
+          # as a major lint; switching to `major` if so).
+          release-type: minor
 
   sonarqube:
     runs-on: ubuntu-latest
