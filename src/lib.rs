@@ -7,6 +7,10 @@ pub mod sequences;
 pub mod tenants;
 
 pub use channels::{Channel, ChannelError, ChannelKind, ContactPoint, WebhookUrl};
+pub use notifications::{
+    Content, Notification, NotificationError, NotificationId, NotificationRepository,
+    NotificationService, NotificationStatus,
+};
 pub use recipients::{
     Recipient, RecipientError, RecipientId, RecipientRepository, RecipientService,
 };
