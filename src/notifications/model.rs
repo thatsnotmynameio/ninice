@@ -110,6 +110,14 @@ impl Notification {
         self.status = NotificationStatus::Sent;
         self.sent_at = Some(chrono::Utc::now());
     }
+
+    /// Marks this notification as failed and records `reason`.
+    pub fn mark_failed(&mut self, reason: impl Into<String>) {
+        self.status = NotificationStatus::Failed {
+            reason: reason.into(),
+        };
+        self.sent_at = None;
+    }
 }
 
 #[cfg(test)]
@@ -170,5 +178,27 @@ mod tests {
         assert_eq!(n.status, NotificationStatus::Sent);
         let sent_at = n.sent_at.expect("sent_at must be set after mark_sent");
         assert!(sent_at >= before && sent_at <= after);
+    }
+
+    #[test]
+    fn mark_failed_sets_reason_and_clears_sent_at() {
+        let mut n = Notification::new(
+            TenantId::generate(),
+            RecipientId::generate(),
+            ChannelKind::Webhook,
+            Content::new("hi"),
+        );
+        n.mark_sent();
+        assert!(n.sent_at.is_some());
+
+        n.mark_failed("4xx response");
+
+        assert_eq!(
+            n.status,
+            NotificationStatus::Failed {
+                reason: "4xx response".into()
+            }
+        );
+        assert!(n.sent_at.is_none());
     }
 }
