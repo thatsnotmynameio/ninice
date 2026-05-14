@@ -61,6 +61,14 @@ impl Recipient {
             contact_points,
         })
     }
+
+    /// Adds a contact point to this recipient.
+    ///
+    /// The invariant "at least one contact point" is monotonic: this
+    /// operation can only grow the list.
+    pub fn add_contact_point(&mut self, cp: ContactPoint) {
+        self.contact_points.push(cp);
+    }
 }
 
 #[cfg(test)]
@@ -98,5 +106,20 @@ mod tests {
             Recipient::new(tenant, vec![]),
             Err(RecipientError::NoContactPoints)
         ));
+    }
+
+    #[test]
+    fn add_contact_point_appends() {
+        let tenant = TenantId::generate();
+        let cp1 = webhook_cp();
+        let mut r = Recipient::new(tenant, vec![cp1.clone()]).unwrap();
+
+        let cp2 = ContactPoint {
+            kind: ChannelKind::Webhook,
+            address: "https://other.example/h".into(),
+        };
+        r.add_contact_point(cp2.clone());
+
+        assert_eq!(r.contact_points, vec![cp1, cp2]);
     }
 }
