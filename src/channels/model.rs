@@ -26,8 +26,14 @@ impl WebhookUrl {
     ///
     /// Returns [`ChannelError::InvalidWebhookUrl`] when validation fails.
     pub fn parse(raw: impl Into<String>) -> Result<Self, ChannelError> {
-        // Stub implementation; Task 4 replaces this with the validated version.
-        Ok(Self(raw.into()))
+        let raw = raw.into();
+        if raw.is_empty() {
+            return Err(ChannelError::InvalidWebhookUrl);
+        }
+        if !raw.starts_with("http://") && !raw.starts_with("https://") {
+            return Err(ChannelError::InvalidWebhookUrl);
+        }
+        Ok(Self(raw))
     }
 
     /// Returns the raw URL string.
@@ -47,4 +53,35 @@ pub struct ContactPoint {
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use super::*;
+    use crate::channels::ChannelError;
+
+    #[test]
+    fn parses_https_url() {
+        let url = WebhookUrl::parse("https://example.com/hook").unwrap();
+        assert_eq!(url.as_str(), "https://example.com/hook");
+    }
+
+    #[test]
+    fn parses_http_url() {
+        let url = WebhookUrl::parse("http://example.com/hook").unwrap();
+        assert_eq!(url.as_str(), "http://example.com/hook");
+    }
+
+    #[test]
+    fn rejects_empty() {
+        assert!(matches!(
+            WebhookUrl::parse(""),
+            Err(ChannelError::InvalidWebhookUrl)
+        ));
+    }
+
+    #[test]
+    fn rejects_missing_scheme() {
+        assert!(matches!(
+            WebhookUrl::parse("example.com/hook"),
+            Err(ChannelError::InvalidWebhookUrl)
+        ));
+    }
+}
