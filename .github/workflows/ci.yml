@@ -20,8 +20,10 @@ env:
   RUSTDOCFLAGS: "-D warnings -D rustdoc::broken_intra_doc_links"
 
 jobs:
-  # Tier 0 — cheap source checks, no compile required. Gate the rest of CI.
+  # ─── Tier 0 ─── cheap source checks, no compile. Gate everything below.
+
   fmt:
+    name: Format check
     runs-on: ubuntu-latest
     timeout-minutes: 3
     permissions:
@@ -38,6 +40,7 @@ jobs:
         run: cargo fmt --all --check
 
   typos:
+    name: Spelling check
     runs-on: ubuntu-latest
     timeout-minutes: 3
     permissions:
@@ -50,7 +53,9 @@ jobs:
       - name: Run typos
         uses: crate-ci/typos@5374cbf686e897b15713110e233094e2874de7ef # v1.46.1
 
+  # Verifies the lib's first doc comment is in sync with README.md.
   rdme:
+    name: README sync
     runs-on: ubuntu-latest
     timeout-minutes: 3
     permissions:
@@ -66,9 +71,12 @@ jobs:
       - name: Check README is in sync
         run: cargo rdme --check
 
-  # Tier 1 — first real compilation. Gates the heavy tier below so we don't
-  # repeat the same compile error 4× across docs/msrv/hack/test.
+  # ─── Tier 1 ─── first compilation + supply-chain audit. Gate Tier 2.
+
+  # First real compile. If this fails, Tier 2 jobs would hit the same
+  # error 4× — so we gate them on clippy passing.
   clippy:
+    name: Clippy lints
     needs: [fmt, typos, rdme]
     runs-on: ubuntu-latest
     timeout-minutes: 3
@@ -86,9 +94,27 @@ jobs:
       - name: Run clippy on all targets and features
         run: cargo clippy --all-targets --all-features -- -D warnings
 
-  # Tier 2 — compile-heavy jobs. Run in parallel once clippy proves the
-  # crate at least compiles cleanly.
+  # Reads Cargo.lock + deny.toml; no compile required. Parallel with
+  # clippy. A daily-cron variant lives in audit.yml for RustSec
+  # advisories published between PRs.
+  deny:
+    name: Dependency audit
+    needs: [fmt, typos, rdme]
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/audit
+
+  # ─── Tier 2 ─── compile-heavy jobs. Parallel once clippy proves compile.
+
   docs:
+    name: Docs build
     needs: clippy
     runs-on: ubuntu-latest
     timeout-minutes: 3
@@ -105,7 +131,10 @@ jobs:
       - name: Build docs (no deps, all features)
         run: cargo doc --no-deps --all-features
 
+  # Re-checks against the crate's minimum-supported Rust version (per
+  # the `rust-version` field in Cargo.toml).
   msrv:
+    name: MSRV verification
     needs: clippy
     runs-on: ubuntu-latest
     timeout-minutes: 3
@@ -123,7 +152,10 @@ jobs:
       - name: Verify MSRV
         run: cargo msrv verify -- cargo check --all-features
 
+  # cargo-hack: builds every feature combination up to depth 2 to catch
+  # feature-gate breakage that single-feature builds miss.
   hack:
+    name: Feature powerset
     needs: clippy
     runs-on: ubuntu-latest
     timeout-minutes: 3
@@ -142,6 +174,7 @@ jobs:
         run: cargo hack check --feature-powerset --depth 2 --no-dev-deps
 
   test:
+    name: Test suite
     needs: clippy
     runs-on: ubuntu-latest
     timeout-minutes: 3
@@ -161,17 +194,19 @@ jobs:
       - name: Run doctests
         run: cargo test --doc --all-features
 
-  # Tier 3 — coverage scan. Only meaningful if tests pass.
+  # ─── Tier 3 ─── coverage scan. Only meaningful if tests pass.
+
+  # Sonar runs cargo clippy internally to collect findings; with the
+  # workflow-level `RUSTFLAGS: -D warnings` every warning aborts the
+  # scan instead of being reported. Reset it here so clippy completes
+  # and the report reaches Sonar.
   sonarqube:
+    name: Coverage (Sonar)
     needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 3
     permissions:
       contents: read
-    # Sonar runs cargo clippy internally to collect findings; with the
-    # workflow-level `RUSTFLAGS: -D warnings` every warning aborts the
-    # scan instead of being reported. Reset it here so clippy completes
-    # and the report reaches Sonar.
     env:
       RUSTFLAGS: ""
       RUSTDOCFLAGS: ""
@@ -201,11 +236,12 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
-  # Aggregator — required by branch protection. Every upstream must report
-  # success; with the tiered `needs:` above, a `skipped` result now means an
-  # upstream cascade failure, so we no longer accept `skipped` as OK.
+  # Single required check for branch protection. Requires every upstream
+  # to report success. Job key is intentionally `conclusion` (not given a
+  # display name) so the `Protect main` ruleset's existing context match
+  # keeps working with no surgery.
   conclusion:
-    needs: [fmt, typos, rdme, clippy, docs, msrv, hack, test, sonarqube]
+    needs: [fmt, typos, rdme, clippy, deny, docs, msrv, hack, test, sonarqube]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 3

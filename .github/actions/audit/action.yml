@@ -1,0 +1,13 @@
+name: Dependency audit
+description: Install cargo-deny and run `cargo deny check`. The calling job MUST run actions/checkout first — GitHub needs the repo on disk to load `./.github/actions/audit/action.yml`.
+
+runs:
+  using: composite
+  steps:
+    - name: Install cargo-deny
+      uses: taiki-e/install-action@e1c4cd42111751368541a7cb5db3522bd1f846a4 # v2.78.0
+      with:
+        tool: cargo-deny
+    - name: Run cargo deny check
+      shell: bash
+      run: cargo deny check
