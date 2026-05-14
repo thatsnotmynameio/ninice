@@ -1,12 +1,7 @@
-//! `ninice` is a TODO command-line application.
+//! `ninice` is a multi-channel, multi-tenant notification management library.
 
-/// Returns the canonical greeting printed by the binary.
-///
-/// # Examples
-///
-/// ```
-/// assert_eq!(ninice::greeting(), "Hello, world!");
-/// ```
-pub fn greeting() -> &'static str {
-    "Hello, world!"
-}
+pub mod channels;
+pub mod notifications;
+pub mod recipients;
+pub mod sequences;
+pub mod tenants;
