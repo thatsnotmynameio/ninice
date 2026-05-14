@@ -15,7 +15,7 @@ pub use recipients::{
     Recipient, RecipientError, RecipientId, RecipientRepository, RecipientService,
 };
 pub use sequences::{
-    Enrollment, EnrollmentId, EnrollmentRepository, EnrollmentStatus, Sequence, SequenceError,
-    SequenceId, SequenceRepository, SequenceService, SequenceStep,
+    Enrollment, EnrollmentId, EnrollmentRepository, EnrollmentStatus, Sequence, SequenceBuilder,
+    SequenceError, SequenceId, SequenceRepository, SequenceService, SequenceStep,
 };
 pub use tenants::TenantId;

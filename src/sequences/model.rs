@@ -83,6 +83,51 @@ pub struct Sequence {
     pub steps: Vec<SequenceStep>,
 }
 
+impl Sequence {
+    /// Starts building a sequence under `tenant_id` with the given `name`.
+    #[must_use]
+    pub fn builder(tenant_id: TenantId, name: impl Into<String>) -> SequenceBuilder {
+        SequenceBuilder {
+            tenant_id,
+            name: name.into(),
+            steps: Vec::new(),
+        }
+    }
+}
+
+/// Fluent builder for [`Sequence`].
+#[derive(Debug)]
+pub struct SequenceBuilder {
+    tenant_id: TenantId,
+    name: String,
+    steps: Vec<SequenceStep>,
+}
+
+impl SequenceBuilder {
+    /// Appends `step` to the sequence under construction.
+    #[must_use]
+    pub fn add_step(mut self, step: SequenceStep) -> Self {
+        self.steps.push(step);
+        self
+    }
+
+    /// Finalizes the sequence.
+    ///
+    /// # Errors
+    /// Returns [`crate::sequences::SequenceError::EmptySteps`] if no steps were added.
+    pub fn build(self) -> Result<Sequence, crate::sequences::SequenceError> {
+        if self.steps.is_empty() {
+            return Err(crate::sequences::SequenceError::EmptySteps);
+        }
+        Ok(Sequence {
+            id: SequenceId::generate(),
+            tenant_id: self.tenant_id,
+            name: self.name,
+            steps: self.steps,
+        })
+    }
+}
+
 /// Progress status of an enrollment.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EnrollmentStatus {
@@ -129,5 +174,35 @@ mod tests {
     #[test]
     fn enrollment_id_generate_produces_distinct() {
         assert_ne!(EnrollmentId::generate(), EnrollmentId::generate());
+    }
+
+    fn sample_step() -> SequenceStep {
+        SequenceStep {
+            delay: Duration::from_secs(60),
+            channel: ChannelKind::Webhook,
+            content: Content::new("hi"),
+        }
+    }
+
+    #[test]
+    fn builder_rejects_empty_steps() {
+        let tenant = TenantId::generate();
+        let result = Sequence::builder(tenant, "welcome").build();
+        assert!(matches!(result, Err(crate::sequences::SequenceError::EmptySteps)));
+    }
+
+    #[test]
+    fn builder_accumulates_steps() {
+        let tenant = TenantId::generate();
+        let s = sample_step();
+        let seq = Sequence::builder(tenant, "welcome")
+            .add_step(s.clone())
+            .add_step(s.clone())
+            .build()
+            .unwrap();
+        assert_eq!(seq.tenant_id, tenant);
+        assert_eq!(seq.name, "welcome");
+        assert_eq!(seq.steps.len(), 2);
+        assert_eq!(seq.steps[0], s);
     }
 }
