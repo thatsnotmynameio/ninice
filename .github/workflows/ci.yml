@@ -51,7 +51,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Run typos
-        uses: crate-ci/typos@5374cbf686e897b15713110e233094e2874de7ef # v1.46.1
+        uses: crate-ci/typos@aca895bf05aec0cb7dffa6f94495e923224d9f17 # v1.46.2
 
   # Verifies the lib's first doc comment is in sync with README.md.
   rdme:
@@ -228,7 +228,7 @@ jobs:
         with:
           components: clippy,llvm-tools-preview
       - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@e1c4cd42111751368541a7cb5db3522bd1f846a4 # v2.78.0
+        uses: taiki-e/install-action@65851e10cd6c377f11a60e600abc07cb08643468 # v2.79.3
         with:
           tool: cargo-llvm-cov
       - name: Restore cargo cache
@@ -239,7 +239,7 @@ jobs:
       - name: Generate LCOV coverage report
         run: cargo llvm-cov --lcov --output-path lcov.info --all-features
       - name: SonarQube Scan
-        uses: SonarSource/sonarqube-scan-action@59db25f34e16620e48ab4bb9e4a5dce155cb5432 # v8.0.0
+        uses: SonarSource/sonarqube-scan-action@7006c4492b2e0ee0f816d36501671557c97f5995 # v8.1.0
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
